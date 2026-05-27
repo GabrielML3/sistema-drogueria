@@ -1,20 +1,22 @@
 from rest_framework import serializers
-from .models import Categoria, Producto, EmpaqueAlternativo
+from .models import Categoria, Producto, Venta
 
 class CategoriaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Categoria
         fields = '__all__'
 
-class EmpaqueAlternativoSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EmpaqueAlternativo
-        fields = '__all__'
-
 class ProductoSerializer(serializers.ModelSerializer):
-    # Esto le dice a DRF que, al pedir un producto, también traiga la info de sus empaques
-    empaques = EmpaqueAlternativoSerializer(many=True, read_only=True)
-    
     class Meta:
         model = Producto
-        fields = ['id', 'nombre', 'categoria', 'laboratorio', 'unidad_medida_minima', 'stock_total', 'stock_minimo_alerta', 'empaques']
+        fields = '__all__'
+
+class VentaSerializer(serializers.ModelSerializer):
+    fecha_formateada = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Venta
+        fields = '__all__'
+
+    def get_fecha_formateada(self, obj):
+        return obj.fecha_hora.strftime("%d/%m/%Y %I:%M %p")
