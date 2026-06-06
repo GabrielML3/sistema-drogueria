@@ -119,3 +119,25 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 CORS_ALLOW_ALL_ORIGINS = True
+
+
+
+# Configuración de Django Rest Framework
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    # Nota: Aún no bloquearemos las rutas ('IsAuthenticated') para que React no se rompa de golpe.
+    # Lo haremos apenas construyamos la pantalla de Login en el frontend.
+}
+
+# Configuración de los Tokens (Manillas VIP)
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=1), # El usuario debe loguearse cada 24 horas
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': False,
+    'AUTH_HEADER_TYPES': ('Bearer',), # React enviará el token diciendo "Bearer <token>"
+}

@@ -1,1 +1,41 @@
 @import "tailwindcss";
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .print\:block,
+  .print\:block * {
+    visibility: visible;
+  }
+
+  .print\:block {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 76mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  html,
+  body {
+    width: 76mm;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    zoom: 100%;
+  }
+
+  * {
+    box-sizing: border-box;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  @page {
+    size: 76mm auto;
+    margin: 0;
+  }
+}
