@@ -105,6 +105,99 @@ class ProcesarVentaView(APIView):
             "total": float(total_venta)
         }, status=status.HTTP_201_CREATED)
     
-class VentaViewSet(viewsets.ReadOnlyModelViewSet):
+class VentaViewSet(viewsets.ModelViewSet):
     queryset = Venta.objects.all().order_by('-fecha_hora') 
     serializer_class = VentaSerializer
+
+    # Anular factura completa
+    @transaction.atomic
+    def destroy(self, request, *args, **kwargs):
+        venta = self.get_object()
+        
+        detalles = getattr(venta, 'detalles', None)
+        lista_detalles = detalles.all() if detalles is not None else venta.detalleventa_set.all()
+        
+        for detalle in lista_detalles:
+            producto = detalle.producto
+            if detalle.tipo_unidad == 'CAJA':
+                unidades = detalle.cantidad * producto.unidades_por_caja
+            elif detalle.tipo_unidad == 'BLISTER':
+                unidades = detalle.cantidad * producto.unidades_por_blister
+            else:
+                unidades = detalle.cantidad
+
+            producto.stock_actual_unidades += unidades
+            producto.save()
+
+        venta.delete()
+
+        return Response(
+            {"mensaje": "Venta eliminada e inventario restablecido con éxito"},
+            status=status.HTTP_200_OK
+        )
+
+    # Devolver producto individual de la factura y recalcular
+    @action(detail=True, methods=['post'], url_path='eliminar-item')
+    @transaction.atomic
+    def eliminar_item(self, request, pk=None):
+        venta = self.get_object()
+        detalle_id = request.data.get('detalle_id')
+        
+        if not detalle_id:
+            return Response({"error": "Se requiere el ID del detalle"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            detalle = DetalleVenta.objects.get(id=detalle_id, venta=venta)
+        except DetalleVenta.DoesNotExist:
+            return Response({"error": "El producto no pertenece a esta factura"}, status=status.HTTP_404_NOT_FOUND)
+
+        # 1. Restablecer el stock del producto devuelto
+        producto = detalle.producto
+        if detalle.tipo_unidad == 'CAJA':
+            unidades = detalle.cantidad * producto.unidades_por_caja
+        elif detalle.tipo_unidad == 'BLISTER':
+            unidades = detalle.cantidad * producto.unidades_por_blister
+        else:
+            unidades = detalle.cantidad
+
+        producto.stock_actual_unidades += unidades
+        producto.save()
+
+        # 2. Eliminar el producto de la factura
+        detalle.delete()
+
+        # 3. Comprobar si quedaron más productos en la factura
+        detalles_restantes = DetalleVenta.objects.filter(venta=venta)
+        if not detalles_restantes.exists():
+            venta.delete()
+            return Response({
+                "mensaje": "Factura eliminada por completo ya que no quedaron productos.",
+                "venta_eliminada": True
+            }, status=status.HTTP_200_OK)
+
+        # 4. Recalcular el Total y la Ganancia Neta con los ítems que quedaron
+        nuevo_total = Decimal('0.00')
+        nuevo_costo = Decimal('0.00')
+
+        for d in detalles_restantes:
+            nuevo_total += d.subtotal
+            prod = d.producto
+            if d.tipo_unidad == 'CAJA':
+                costo_unit = prod.precio_compra_caja
+            elif d.tipo_unidad == 'BLISTER':
+                costo_unit = (prod.precio_compra_caja / prod.unidades_por_caja) * prod.unidades_por_blister
+            else:
+                costo_unit = prod.precio_compra_caja / prod.unidades_por_caja
+            
+            nuevo_costo += (costo_unit * Decimal(str(d.cantidad)))
+
+        venta.total = nuevo_total
+        venta.ganancia_neta = nuevo_total - nuevo_costo
+        venta.save()
+
+        serializer = self.get_serializer(venta)
+        return Response({
+            "mensaje": "Producto devuelto y factura recalculada con éxito",
+            "venta_eliminada": False,
+            "venta": serializer.data
+        }, status=status.HTTP_200_OK)

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
-import { DollarSign, TrendingUp, ShoppingCart, Calendar, Filter, Eye, FileText, Package } from 'lucide-react'
+import { DollarSign, TrendingUp, ShoppingCart, Calendar, Filter, Eye, FileText, Package, Printer, Trash2 } from 'lucide-react'
 import clienteAxios from '../api/axios'
+import qz from 'qz-tray'
+import Swal from 'sweetalert2'
 
 // Componentes UI
 import Input from '../components/ui/Input'
@@ -13,6 +15,7 @@ export default function Contabilidad() {
   const [tipoFiltro, setTipoFiltro] = useState('HOY') 
   const [fechaInicio, setFechaInicio] = useState('')
   const [fechaFin, setFechaFin] = useState('')
+  const [imprimiendo, setImprimiendo] = useState(false)
 
   useEffect(() => {
     cargarVentas()
@@ -23,9 +26,187 @@ export default function Contabilidad() {
       const res = await clienteAxios.get('ventas/')
       setVentas(res.data)
     } catch (error) {
-      console.error("Error cargando ventas. Verifica que el servidor de Django no tenga errores:", error)
+      console.error("Error cargando ventas:", error)
     } finally {
       setCargando(false)
+    }
+  }
+
+  // IMPRESIÓN CON EL DISEÑO EXACTO DE FACTURA DE VENTA POS
+  const reimprimirFactura = async (venta) => {
+    setImprimiendo(true)
+    try {
+      if (!qz.websocket.isActive()) {
+        await qz.websocket.connect()
+      }
+
+      const config = qz.configs.create("EPSON")
+      
+      const fechaVentaObj = venta.fecha_hora ? new Date(venta.fecha_hora) : new Date()
+      const fechaTxt = fechaVentaObj.toLocaleDateString('es-CO')
+      const horaTxt = fechaVentaObj.toLocaleTimeString('es-CO')
+
+      const data = [
+        '\x1B\x40',          // Reset
+        '\x1B\x61\x01',      // Centrar
+        '\x1B\x45\x01',      // Negrita On
+        'DROGUERIA\n',
+        'DON SIXTO GABRIEL\n',
+        '\x1B\x45\x00',      // Negrita Off
+        'NIT: 17.341.933-1\n',
+        'K 19 4D 08, Macunaima\n',
+        'Villavicencio, Meta\n',
+        'Celular: 320 490 1142\n',
+        '---------------------------------\n',
+        '\x1B\x45\x01',
+        `Factura de Venta POS #${venta.id.toString().padStart(5, '0')}\n`,
+        '\x1B\x45\x00',
+        `Fecha: ${fechaTxt} ${horaTxt}\n`,
+        'Cajero: Administrador\n',
+        '---------------------------------\n',
+        '\x1B\x61\x00',      // Izquierda
+        '\x1B\x45\x01',
+        'CT  ITEM                  VALOR  \n',
+        '\x1B\x45\x00',
+      ]
+
+      const detalles = venta.detalles || []
+      detalles.forEach(item => {
+        const cant = (item.cantidad || 1).toString().padEnd(3, ' ')
+        const nombreProd = (item.producto_nombre || 'Producto').substring(0, 18).padEnd(19, ' ')
+        const precioUnit = item.precio_unitario_aplicado || item.precio_unitario || item.precio || 0
+        const subtotalVal = item.subtotal || (precioUnit * item.cantidad)
+        const subtotalStr = `$${parseFloat(subtotalVal).toLocaleString()}`.padStart(9, ' ')
+        
+        data.push(`${cant}${nombreProd}${subtotalStr}\n`)
+      })
+
+      data.push('---------------------------------\n')
+      data.push('\x1B\x45\x01')
+      data.push(`TOTAL PAGADO: $${parseFloat(venta.total).toLocaleString()}\n`)
+      data.push('\x1B\x45\x00')
+      data.push('---------------------------------\n')
+      data.push('\x1B\x61\x01')
+      data.push('¡Gracias por su compra!\n')
+      data.push('Que tenga un excelente día\n\n\n\n\n\x1B\x69') // Cortar papel
+
+      await qz.print(config, data)
+
+      Swal.fire({
+        title: '¡Factura Impresa!',
+        text: `Factura #${venta.id.toString().padStart(5, '0')} enviada a la impresora.`,
+        icon: 'success',
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000,
+        timerProgressBar: true
+      })
+
+    } catch (error) {
+      console.error("Error al imprimir:", error)
+      Swal.fire({
+        title: 'Error de Impresión',
+        text: 'No se pudo conectar con la impresora QZ Tray.',
+        icon: 'error',
+        confirmButtonColor: '#2C46AF'
+      })
+    } finally {
+      setImprimiendo(false)
+    }
+  }
+
+  // DEVOLVER UN SOLO PRODUCTO Y RECALCULAR FACTURA
+  const eliminarItemFactura = async (detalleId, productoNombre) => {
+    const resSwal = await Swal.fire({
+      title: `¿Devolver ${productoNombre}?`,
+      text: "Este producto regresará al inventario y el total de la factura se recalculará automáticamente.",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Sí, devolver producto',
+      cancelButtonText: 'Cancelar'
+    })
+
+    if (resSwal.isConfirmed) {
+      try {
+        const res = await clienteAxios.post(`ventas/${ventaSeleccionada.id}/eliminar-item/`, { detalle_id: detalleId })
+        
+        if (res.data.venta_eliminada) {
+          await Swal.fire({
+            title: 'Factura Anulada',
+            text: 'Como devolviste todos los productos, la factura fue eliminada por completo.',
+            icon: 'info',
+            confirmButtonColor: '#2C46AF'
+          })
+          setVentaSeleccionada(null)
+        } else {
+          await Swal.fire({
+            title: 'Producto Devuelto',
+            text: 'El inventario y la contabilidad fueron recalculados correctamente.',
+            icon: 'success',
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 3000,
+            timerProgressBar: true
+          })
+          setVentaSeleccionada(res.data.venta)
+        }
+        cargarVentas()
+      } catch (error) {
+        console.error("Error devolviendo ítem:", error)
+        Swal.fire({
+          title: 'Error',
+          text: 'No se pudo devolver el producto.',
+          icon: 'error',
+          confirmButtonColor: '#2C46AF'
+        })
+      }
+    }
+  }
+
+  // ANULAR FACTURA COMPLETA
+  const anularVenta = async (ventaId) => {
+    const numFactura = ventaId.toString().padStart(5, '0')
+
+    const resultado = await Swal.fire({
+      title: `¿Anular Factura #${numFactura}?`,
+      text: "Esta acción eliminará la factura completa y devolverá todos sus productos al inventario.",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Sí, anular todo',
+      cancelButtonText: 'Cancelar'
+    })
+
+    if (resultado.isConfirmed) {
+      try {
+        await clienteAxios.delete(`ventas/${ventaId}/`)
+        
+        await Swal.fire({
+          title: '¡Factura Anulada!',
+          text: `La Factura #${numFactura} fue eliminada y todo el stock regresó al inventario.`,
+          icon: 'success',
+          confirmButtonColor: '#2C46AF'
+        })
+        
+        if (ventaSeleccionada && ventaSeleccionada.id === ventaId) {
+          setVentaSeleccionada(null)
+        }
+        
+        cargarVentas()
+      } catch (error) {
+        console.error("Error al anular la venta:", error)
+        Swal.fire({
+          title: 'Error al Anular',
+          text: 'Hubo un inconveniente al procesar la anulación.',
+          icon: 'error',
+          confirmButtonColor: '#2C46AF'
+        })
+      }
     }
   }
 
@@ -181,14 +362,32 @@ export default function Contabilidad() {
                       <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">Completada</span>
                     </td>
                     <td className="p-4 text-center">
-                      {/* BOTÓN PARA ABRIR EL DETALLE */}
-                      <button 
-                        onClick={() => setVentaSeleccionada(venta)} 
-                        className="text-[#2C46AF] hover:text-[#1E3185] bg-blue-50 hover:bg-blue-100 p-2 rounded-lg transition-colors shadow-sm"
-                        title="Ver detalles de la venta"
-                      >
-                        <Eye className="w-5 h-5" />
-                      </button>
+                      <div className="flex items-center justify-center gap-2">
+                        <button 
+                          onClick={() => setVentaSeleccionada(venta)} 
+                          className="text-[#2C46AF] hover:text-[#1E3185] bg-blue-50 hover:bg-blue-100 p-2 rounded-lg transition-colors shadow-sm"
+                          title="Ver detalles de la venta"
+                        >
+                          <Eye className="w-5 h-5" />
+                        </button>
+
+                        <button 
+                          onClick={() => reimprimirFactura(venta)}
+                          disabled={imprimiendo}
+                          className="text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 p-2 rounded-lg transition-colors shadow-sm disabled:opacity-50"
+                          title="Imprimir Factura POS"
+                        >
+                          <Printer className="w-5 h-5" />
+                        </button>
+
+                        <button 
+                          onClick={() => anularVenta(venta.id)}
+                          className="text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 p-2 rounded-lg transition-colors shadow-sm"
+                          title="Anular Factura Completa"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -198,7 +397,7 @@ export default function Contabilidad() {
         </div>
       </div>
 
-      {/* MODAL DE DETALLE DE VENTA CON MAPEO INTELIGENTE */}
+      {/* MODAL DE DETALLE DE VENTA */}
       {ventaSeleccionada && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
@@ -225,21 +424,19 @@ export default function Contabilidad() {
                     <th className="p-4 border-b text-gray-600 font-semibold text-sm text-center">Cant.</th>
                     <th className="p-4 border-b text-gray-600 font-semibold text-sm text-right">Precio Und.</th>
                     <th className="p-4 border-b text-gray-600 font-semibold text-sm text-right">Subtotal</th>
+                    <th className="p-4 border-b text-gray-600 font-semibold text-sm text-center">Acción</th>
                   </tr>
                 </thead>
                 <tbody>
                   {ventaSeleccionada.detalles && ventaSeleccionada.detalles.length > 0 ? (
                     ventaSeleccionada.detalles.map((detalle, index) => {
-                      
-                      // MAGIA DEFENSIVA: Si no encuentra 'precio_unitario', busca 'precio' o 'precio_venta'
-                      const precio = detalle.precio_unitario || detalle.precio || detalle.precio_venta || 0;
-                      // Si no encuentra subtotal, multiplica el precio por la cantidad
-                      const subtotal = detalle.subtotal || detalle.total || (precio * (detalle.cantidad || 1)) || 0;
+                      const precio = detalle.precio_unitario_aplicado || detalle.precio_unitario || detalle.precio || detalle.precio_venta || 0;
+                      const subtotal = detalle.subtotal || (precio * (detalle.cantidad || 1)) || 0;
                       const formato = detalle.tipo_unidad || detalle.formato || detalle.presentacion || 'UND';
                       const cantidad = detalle.cantidad || 1;
 
                       return (
-                        <tr key={index} className="border-b hover:bg-slate-50">
+                        <tr key={index} className="border-b hover:bg-slate-50 transition-colors">
                           <td className="p-4 font-bold text-gray-800 flex items-center">
                             <Package className="w-4 h-4 mr-2 text-[#2C46AF]" />
                             {detalle.producto_nombre}
@@ -252,12 +449,22 @@ export default function Contabilidad() {
                           <td className="p-4 text-center font-bold text-gray-700">{cantidad}</td>
                           <td className="p-4 text-right text-gray-600 font-medium">${parseFloat(precio).toLocaleString()}</td>
                           <td className="p-4 text-right font-bold text-gray-800">${parseFloat(subtotal).toLocaleString()}</td>
+                          <td className="p-4 text-center">
+                            {/* BOTÓN PARA DEVOLVER SOLO ESTE PRODUCTO */}
+                            <button
+                              onClick={() => eliminarItemFactura(detalle.id, detalle.producto_nombre)}
+                              className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Devolver este producto al inventario"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
                         </tr>
                       )
                     })
                   ) : (
                     <tr>
-                      <td colSpan="5" className="p-8 text-center text-gray-500 italic">
+                      <td colSpan="6" className="p-8 text-center text-gray-500 italic">
                         Los detalles de esta factura no están disponibles en la base de datos.
                       </td>
                     </tr>
@@ -266,13 +473,32 @@ export default function Contabilidad() {
               </table>
             </div>
 
-            <div className="p-6 border-t bg-gray-50 flex justify-end">
-              <div className="w-1/2 space-y-2">
-                <div className="flex justify-between text-gray-600 font-medium">
+            {/* PIE DE PÁGINA REDISEÑADO SIN TRASLAPES */}
+            <div className="p-5 border-t bg-gray-50 flex flex-wrap justify-between items-center gap-4">
+              {/* ACCIONES DEL MODAL */}
+              <div className="flex flex-wrap gap-2 items-center">
+                <button
+                  onClick={() => reimprimirFactura(ventaSeleccionada)}
+                  disabled={imprimiendo}
+                  className="bg-slate-700 hover:bg-slate-800 text-white font-bold py-2 px-3.5 rounded-lg flex items-center gap-1.5 text-xs sm:text-sm transition-colors disabled:opacity-50 shadow-sm whitespace-nowrap"
+                >
+                  <Printer className="w-4 h-4" /> Imprimir Factura
+                </button>
+                <button
+                  onClick={() => anularVenta(ventaSeleccionada.id)}
+                  className="bg-red-50 hover:bg-red-100 text-red-600 font-bold py-2 px-3.5 rounded-lg flex items-center gap-1.5 text-xs sm:text-sm transition-colors shadow-sm whitespace-nowrap border border-red-200"
+                >
+                  <Trash2 className="w-4 h-4" /> Anular Factura Completa
+                </button>
+              </div>
+
+              {/* TOTALES FINANCIEROS */}
+              <div className="text-right space-y-1 min-w-[200px]">
+                <div className="flex justify-between items-center gap-4 text-gray-600 font-medium text-sm">
                   <span>Ganancia Neta:</span>
                   <span className="text-green-600 font-bold">${parseFloat(ventaSeleccionada.ganancia_neta).toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between text-xl font-bold text-gray-800 border-t pt-2 border-gray-200">
+                <div className="flex justify-between items-center gap-4 text-lg font-bold text-gray-800 border-t pt-1 border-gray-200">
                   <span>Total Pagado:</span>
                   <span className="text-[#2C46AF]">${parseFloat(ventaSeleccionada.total).toLocaleString()}</span>
                 </div>

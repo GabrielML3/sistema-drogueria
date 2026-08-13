@@ -3,7 +3,7 @@ import { Plus, Edit, Trash2, Search, AlertTriangle, Package, Layers, Barcode, Ca
 import Swal from 'sweetalert2'
 import clienteAxios from '../api/axios'
 
-// Importamos nuestros componentes de Nivel Senior
+// Importamos nuestros componentes UI
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 
@@ -61,7 +61,7 @@ export default function Inventario() {
     setModalAbierto(true)
   }
 
-  // SOLUCIÓN 1: Protección contra valores nulos al editar
+  // SOLUCIÓN AL BUG: Usamos ?? para que respete el valor guardado (ej. 2) y no lo reemplace por 5
   const abrirModalEditar = (prod) => {
     setEditandoId(prod.id)
     setFormData({
@@ -73,15 +73,15 @@ export default function Inventario() {
       precio_venta_caja: prod.precio_venta_caja || '0.00',
       precio_venta_blister: prod.precio_venta_blister || '0.00', 
       precio_venta_unidad: prod.precio_venta_unidad || '0.00',
-      unidades_por_blister: (prod.unidades_por_blister || 1).toString(), 
-      unidades_por_caja: (prod.unidades_por_caja || 1).toString(),
-      stock_actual_unidades: (prod.stock_actual_unidades || 0).toString(), 
-      stock_minimo_alerta: (prod.stock_minimo_alerta || 5).toString()
+      unidades_por_blister: (prod.unidades_por_blister ?? 1).toString(), 
+      unidades_por_caja: (prod.unidades_por_caja ?? 1).toString(),
+      stock_actual_unidades: (prod.stock_actual_unidades ?? 0).toString(), 
+      stock_minimo_alerta: (prod.stock_minimo_alerta ?? 5).toString()
     })
     setModalAbierto(true)
   }
 
-  // SOLUCIÓN 2: Limpieza de datos antes de crear/actualizar
+  // Limpieza y preparación de datos antes de enviar al backend
   const guardarProducto = async (e) => {
     e.preventDefault()
     if (!formData.categoria) {
@@ -91,13 +91,13 @@ export default function Inventario() {
 
     const payload = { ...formData };
     
-    // Forzamos a que si un campo de precio está vacío, envíe '0.00' al backend
+    // Forzamos valores seguros usando asignaciones explícitas
     payload.precio_compra_caja = payload.precio_compra_caja || '0.00';
     payload.precio_venta_caja = payload.precio_venta_caja || '0.00';
     payload.precio_venta_blister = payload.precio_venta_blister || '0.00';
     payload.precio_venta_unidad = payload.precio_venta_unidad || '0.00';
-    payload.stock_actual_unidades = payload.stock_actual_unidades || '0';
-    payload.stock_minimo_alerta = payload.stock_minimo_alerta || '5';
+    payload.stock_actual_unidades = payload.stock_actual_unidades !== '' ? payload.stock_actual_unidades : '0';
+    payload.stock_minimo_alerta = payload.stock_minimo_alerta !== '' ? payload.stock_minimo_alerta : '5';
 
     if (payload.tipo_presentacion === 'SIMPLE') {
       payload.unidades_por_caja = '1'; payload.unidades_por_blister = '1';
@@ -122,8 +122,7 @@ export default function Inventario() {
     }
   }
 
-  // SOLUCIÓN 3: Explicar por qué Django bloquea la eliminación
-  const eliminarProducto = (id, nombre) => {
+  const eliminarProducto = (id, nombre) => { 
     Swal.fire({
       title: '¿Estás seguro?', text: `Vas a eliminar permanentemente: ${nombre}`, icon: 'warning',
       showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6',
@@ -134,8 +133,7 @@ export default function Inventario() {
           await clienteAxios.delete(`productos/${id}/`)
           Swal.fire('Eliminado', 'Producto borrado del inventario.', 'success')
           cargarProductos()
-        } catch (error) { 
-          // Si Django lanza error 500, es porque el producto tiene facturas asociadas
+        } catch (error) {  
           const status = error.response?.status;
           if (status === 500 || status === 400 || status === 403) {
             Swal.fire('Acción Denegada', 'No puedes eliminar un producto que ya tiene ventas registradas porque dañaría la contabilidad. Si ya no lo vendes, edítalo y pon su stock en 0.', 'error')
@@ -147,15 +145,13 @@ export default function Inventario() {
     })
   }
 
-  // NUEVA FUNCIÓN: Cálculo de Capital Invertido
-  const calcularValorInventario = () => {
+  const calcularValorInventario = () => { 
     const totalInvertido = productos.reduce((suma, prod) => {
       const precioCompra = parseFloat(prod.precio_compra_caja) || 0;
       const unidadesPorCaja = parseInt(prod.unidades_por_caja) || 1;
       const stockActual = parseInt(prod.stock_actual_unidades) || 0;
 
-      // Dividimos el costo de la caja entre las unidades para saber el costo real de cada pastilla física en stock
-      const costoPorUnidad = unidadesPorCaja > 0 ? (precioCompra / unidadesPorCaja) : 0;
+      const costoPorUnidad = unidadesPorCaja > 0 ? (precioCompra / unidadesPorCaja) : 0; 
       
       return suma + (costoPorUnidad * stockActual);
     }, 0);
@@ -265,7 +261,7 @@ export default function Inventario() {
         </div>
       </div>
 
-      {/* MODAL INTELIGENTE (Ahora con Componentes UI) */}
+      {/* MODAL INTELIGENTE */}
       {modalAbierto && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
@@ -287,8 +283,7 @@ export default function Inventario() {
                   
                   <Input required name="nombre" value={formData.nombre} onChange={handleChange} label="Nombre del Producto" placeholder="Ej. Acetaminofén 500mg" />
 
-                  <div className="grid grid-cols-2 gap-4">
-                    {/* Los Selects los mantenemos nativos pero con el estilo de nuestros inputs (p-2.5) */}
+                  <div className="grid grid-cols-2 gap-4"> 
                     <div>
                       <label className="block text-sm font-semibold text-gray-600 mb-1">Categoría <span className="text-red-500">*</span></label>
                       <select required name="categoria" value={formData.categoria} onChange={handleChange} className="w-full p-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-[#2C46AF] focus:ring-1 focus:ring-[#2C46AF] bg-white">

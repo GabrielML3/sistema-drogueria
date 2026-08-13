@@ -12,8 +12,7 @@ import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import ProductoVenta from '../components/ProductoVenta'
 import ItemCarrito from '../components/ItemCarrito'
-
-// IMPORTAMOS LA LIBRERÍA DE QZ TRAY
+ 
 import qz from 'qz-tray'
 
 export default function PuntoVenta() {
@@ -22,8 +21,7 @@ export default function PuntoVenta() {
   const [cargando, setCargando] = useState(false)
   const [todosLosProductos, setTodosLosProductos] = useState([])
 
-  // CONECTAR A QZ TRAY AL ABRIR LA PÁGINA
-  useEffect(() => {
+  useEffect(() => { 
     const conectarImpresora = async () => {
       try {
         if (!qz.websocket.isActive()) {
@@ -74,6 +72,7 @@ export default function PuntoVenta() {
     setBusqueda('')
   }
 
+  // AUMENTAR O DISMINUIR CON BOTONES + Y -
   const actualizarCantidad = (idUnico, delta) => {
     setCarrito(prev =>
       prev.map(item =>
@@ -81,6 +80,20 @@ export default function PuntoVenta() {
           ? { ...item, cantidad: Math.max(1, item.cantidad + delta) }
           : item
       )
+    )
+  }
+
+  // EDITAR CANTIDAD DIRECTAMENTE DESDE EL TECLADO
+  const fijarCantidadDirecta = (idUnico, valorTexto) => {
+    setCarrito(prev =>
+      prev.map(item => {
+        if (item.idUnico === idUnico) {
+          const num = parseInt(valorTexto, 10)
+          const nuevaCantidad = isNaN(num) || num < 1 ? 1 : num
+          return { ...item, cantidad: nuevaCantidad }
+        }
+        return item
+      })
     )
   }
 
@@ -104,36 +117,29 @@ export default function PuntoVenta() {
     setCargando(false)
   }
 
-  // =======================================================================
-  // LA MAGIA DE QZ TRAY: IMPRESIÓN DIRECTA EN LENGUAJE DE MÁQUINA (ESC/POS)
-  // =======================================================================
-  const imprimirConQZ = async () => {
+  const imprimirConQZ = async () => { 
     try {
       if (!qz.websocket.isActive()) {
         await qz.websocket.connect()
       }
 
-      // IMPORTANTE: Pon aquí el nombre EXACTO de la impresora como aparece en Windows
-      const nombreImpresora = "EPSON TM-U220 Receipt" 
-      
-      const config = qz.configs.create(nombreImpresora)
+      const nombreImpresora = "EPSON TM-U220 Receipt"  
+      const config = qz.configs.create(nombreImpresora) 
 
-      // Función matemática para alinear las columnas a 33 caracteres (estándar TM-U220)
-      const formatearLineaTicket = (cant, nombre, total) => {
+      const formatearLineaTicket = (cant, nombre, total) => { 
         const c = cant.toString().padEnd(3, ' ')
         const t = `$${total.toLocaleString()}`.padStart(9, ' ')
         const n = nombre.substring(0, 19).padEnd(19, ' ')
         return `${c} ${n} ${t}\n`
       }
 
-      // Arreglo de comandos (Hexadecimal para la máquina + Texto plano)
-      const data = [
-        '\x1B\x40',          // Reset / Inicializar impresora
-        '\x1B\x61\x01',      // Alinear al centro
-        '\x1B\x45\x01',      // Activar Negrita
+      const data = [ 
+        '\x1B\x40',
+        '\x1B\x61\x01',
+        '\x1B\x45\x01',
         'DROGUERIA\n',
         'DON SIXTO GABRIEL\n',
-        '\x1B\x45\x00',      // Desactivar Negrita
+        '\x1B\x45\x00',
         'NIT: 17.341.933-1\n',
         'K 19 4D 08, Macunaima\n',
         'Villavicencio, Meta\n',
@@ -145,39 +151,35 @@ export default function PuntoVenta() {
         `Fecha: ${new Date().toLocaleDateString('es-CO')} ${new Date().toLocaleTimeString('es-CO')}\n`,
         'Cajero: Administrador\n',
         '---------------------------------\n',
-        '\x1B\x61\x00',      // Alinear a la izquierda
+        '\x1B\x61\x00',
         '\x1B\x45\x01',
         'CT  ITEM                  VALOR  \n',
         '\x1B\x45\x00',
       ]
-
-      // Agregamos los productos calculados perfectamente
+ 
       carrito.forEach(item => {
         const subtotal = parseFloat(item.precioVentaReal) * item.cantidad
         data.push(formatearLineaTicket(item.cantidad, item.nombre, subtotal))
       })
 
-      // Pie de factura y comandos finales
-      data.push('---------------------------------\n')
-      data.push('\x1B\x61\x02') // Alinear a la derecha
-      data.push('\x1B\x45\x01') // Negrita
+      data.push('---------------------------------\n') 
+      data.push('\x1B\x61\x02')
+      data.push('\x1B\x45\x01')
       data.push(`TOTAL: $${totalPagar.toLocaleString()}\n`)
       data.push('\x1B\x45\x00')
-      data.push('\x1B\x61\x01') // Centro
+      data.push('\x1B\x61\x01')
       data.push('\n!Gracias por su compra!\n')
       data.push('Software by DON SIXTO GABRIEL v1.0\n')
       
-      // Comandos de hardware
-      data.push('\x0A\x0A\x0A\x0A\x0A') // Avanzar papel (5 líneas) para no cortar el texto
-      data.push('\x1D\x56\x41')         // Guillotina: Cortar papel (si el modelo lo soporta)
-      data.push('\x1B\x70\x00\x19\xFA') // ¡Magia!: Patear cajón monedero para que se abra
+      data.push('\x0A\x0A\x0A\x0A\x0A')
+      data.push('\x1D\x56\x41')
+      data.push('\x1B\x70\x00\x19\xFA')
 
-      // Enviamos el paquete crudo directo a la impresora sin abrir el cuadro de Chrome
       await qz.print(config, data)
 
     } catch (error) {
       console.error("Error en QZ Tray:", error)
-      throw error // Lanzamos el error para que SweetAlert lo atrape
+      throw error
     }
   }
 
@@ -210,8 +212,7 @@ export default function PuntoVenta() {
     try {
       const res = await clienteAxios.post('ventas/procesar/', payload)
 
-      if (imprimir) {
-        // Ejecutamos la impresión por QZ Tray (sin ventana de Windows)
+      if (imprimir) { 
         await imprimirConQZ()
       }
       
@@ -292,6 +293,7 @@ export default function PuntoVenta() {
                   item={item}
                   onEliminar={eliminarDelCarrito}
                   onActualizarCantidad={actualizarCantidad}
+                  onFijarCantidad={fijarCantidadDirecta}
                 />
               ))
             )}
@@ -303,10 +305,7 @@ export default function PuntoVenta() {
               <span className="text-3xl font-bold text-[#2C46AF]">${totalPagar.toLocaleString()}</span>
             </div>
 
-            {/* DISTRIBUCIÓN POS COMPACTA */}
-            <div className="flex flex-col gap-2">
-              
-              {/* Fila 1: Opciones secundarias (Más delgadas) */}
+            <div className="flex flex-col gap-2"> 
               <div className="flex gap-2">
                 {carrito.length > 0 && (
                   <Button 
@@ -330,8 +329,7 @@ export default function PuntoVenta() {
                 </Button>
               </div>
 
-              {/* Fila 2: Acción Principal (Altura equilibrada) */}
-              <Button
+              <Button 
                 variant="success"
                 onClick={() => facturarVenta(false)}
                 cargando={cargando}
@@ -340,11 +338,10 @@ export default function PuntoVenta() {
               >
                 Cobrar Venta
               </Button>
-              
-            </div>
+            </div> 
           </div>
         </div>
       </div>
     </>
   )
-}
+} 
