@@ -12,7 +12,7 @@ import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import ProductoVenta from '../components/ProductoVenta'
 import ItemCarrito from '../components/ItemCarrito'
- 
+
 import qz from 'qz-tray'
 
 export default function PuntoVenta() {
@@ -117,29 +117,33 @@ export default function PuntoVenta() {
     setCargando(false)
   }
 
-  const imprimirConQZ = async () => { 
+  const imprimirConQZ = async () => {
     try {
       if (!qz.websocket.isActive()) {
         await qz.websocket.connect()
       }
 
-      const nombreImpresora = "EPSON TM-U220 Receipt"  
-      const config = qz.configs.create(nombreImpresora) 
+      const nombreImpresora = "EPSON TM-U220 Receipt" 
+      const config = qz.configs.create(nombreImpresora)
 
-      const formatearLineaTicket = (cant, nombre, total) => { 
+      // Formateador exacto a 33 caracteres por fila
+      const formatearLineaTicket = (cant, nombre, total) => {
         const c = cant.toString().padEnd(3, ' ')
-        const t = `$${total.toLocaleString()}`.padStart(9, ' ')
-        const n = nombre.substring(0, 19).padEnd(19, ' ')
-        return `${c} ${n} ${t}\n`
+        const n = nombre.substring(0, 18).padEnd(19, ' ')
+        const t = `$${total.toLocaleString()}`.padStart(11, ' ')
+        return `${c}${n}${t}\n`
       }
 
-      const data = [ 
-        '\x1B\x40',
-        '\x1B\x61\x01',
-        '\x1B\x45\x01',
+      // Cabecera exacta de 33 caracteres (3 + 19 + 11)
+      const cabeceraTabla = 'CT '.padEnd(3, ' ') + 'ITEM'.padEnd(19, ' ') + 'VALOR'.padStart(11, ' ')
+
+      const data = [
+        '\x1B\x40',          // Reset / Inicializar impresora
+        '\x1B\x61\x01',      // ALINEACIÓN AL CENTRO
+        '\x1B\x45\x01',      // Activar Negrita
         'DROGUERIA\n',
         'DON SIXTO GABRIEL\n',
-        '\x1B\x45\x00',
+        '\x1B\x45\x00',      // Desactivar Negrita
         'NIT: 17.341.933-1\n',
         'K 19 4D 08, Macunaima\n',
         'Villavicencio, Meta\n',
@@ -150,28 +154,32 @@ export default function PuntoVenta() {
         '\x1B\x45\x00',
         `Fecha: ${new Date().toLocaleDateString('es-CO')} ${new Date().toLocaleTimeString('es-CO')}\n`,
         'Cajero: Administrador\n',
-        '---------------------------------\n',
-        '\x1B\x61\x00',
+        '---------------------------------\n', 
         '\x1B\x45\x01',
-        'CT  ITEM                  VALOR  \n',
+        `${cabeceraTabla}\n`,
         '\x1B\x45\x00',
       ]
- 
+
       carrito.forEach(item => {
         const subtotal = parseFloat(item.precioVentaReal) * item.cantidad
         data.push(formatearLineaTicket(item.cantidad, item.nombre, subtotal))
       })
 
-      data.push('---------------------------------\n') 
-      data.push('\x1B\x61\x02')
+      data.push('---------------------------------\n')
+      
+      const labelTotal = 'TOTAL:'.padEnd(22, ' ')
+      const valTotal = `$${totalPagar.toLocaleString()}`.padStart(11, ' ')
+      
       data.push('\x1B\x45\x01')
-      data.push(`TOTAL: $${totalPagar.toLocaleString()}\n`)
+      data.push(`${labelTotal}${valTotal}\n`)
       data.push('\x1B\x45\x00')
-      data.push('\x1B\x61\x01')
-      data.push('\n!Gracias por su compra!\n')
+      
+      data.push('---------------------------------\n')
+      
+      data.push('¡Gracias por su compra!\n')
       data.push('Software by DON SIXTO GABRIEL v1.0\n')
       
-      data.push('\x0A\x0A\x0A\x0A\x0A')
+      data.push('\x0A\x0A\x0A\x0A')
       data.push('\x1D\x56\x41')
       data.push('\x1B\x70\x00\x19\xFA')
 
@@ -344,4 +352,4 @@ export default function PuntoVenta() {
       </div>
     </>
   )
-} 
+}
