@@ -33,88 +33,102 @@ export default function Contabilidad() {
   }
 
   // IMPRESIÓN CON EL DISEÑO EXACTO DE FACTURA DE VENTA POS
-  const reimprimirFactura = async (venta) => {
-    setImprimiendo(true)
-    try {
-      if (!qz.websocket.isActive()) {
-        await qz.websocket.connect()
-      }
-
-      const config = qz.configs.create("EPSON")
-      
-      const fechaVentaObj = venta.fecha_hora ? new Date(venta.fecha_hora) : new Date()
-      const fechaTxt = fechaVentaObj.toLocaleDateString('es-CO')
-      const horaTxt = fechaVentaObj.toLocaleTimeString('es-CO')
-
-      const data = [
-        '\x1B\x40',          // Reset
-        '\x1B\x61\x01',      // Centrar
-        '\x1B\x45\x01',      // Negrita On
-        'DROGUERIA\n',
-        'DON SIXTO GABRIEL\n',
-        '\x1B\x45\x00',      // Negrita Off
-        'NIT: 17.341.933-1\n',
-        'K 19 4D 08, Macunaima\n',
-        'Villavicencio, Meta\n',
-        'Celular: 320 490 1142\n',
-        '---------------------------------\n',
-        '\x1B\x45\x01',
-        `Factura de Venta POS #${venta.id.toString().padStart(5, '0')}\n`,
-        '\x1B\x45\x00',
-        `Fecha: ${fechaTxt} ${horaTxt}\n`,
-        'Cajero: Administrador\n',
-        '---------------------------------\n',
-        '\x1B\x61\x00',      // Izquierda
-        '\x1B\x45\x01',
-        'CT  ITEM                  VALOR  \n',
-        '\x1B\x45\x00',
-      ]
-
-      const detalles = venta.detalles || []
-      detalles.forEach(item => {
-        const cant = (item.cantidad || 1).toString().padEnd(3, ' ')
-        const nombreProd = (item.producto_nombre || 'Producto').substring(0, 18).padEnd(19, ' ')
-        const precioUnit = item.precio_unitario_aplicado || item.precio_unitario || item.precio || 0
-        const subtotalVal = item.subtotal || (precioUnit * item.cantidad)
-        const subtotalStr = `$${parseFloat(subtotalVal).toLocaleString()}`.padStart(9, ' ')
-        
-        data.push(`${cant}${nombreProd}${subtotalStr}\n`)
-      })
-
-      data.push('---------------------------------\n')
-      data.push('\x1B\x45\x01')
-      data.push(`TOTAL PAGADO: $${parseFloat(venta.total).toLocaleString()}\n`)
-      data.push('\x1B\x45\x00')
-      data.push('---------------------------------\n')
-      data.push('\x1B\x61\x01')
-      data.push('¡Gracias por su compra!\n')
-      data.push('Que tenga un excelente día\n\n\n\n\n\x1B\x69') // Cortar papel
-
-      await qz.print(config, data)
-
-      Swal.fire({
-        title: '¡Factura Impresa!',
-        text: `Factura #${venta.id.toString().padStart(5, '0')} enviada a la impresora.`,
-        icon: 'success',
-        toast: true,
-        position: 'top-end',
-        showConfirmButton: false,
-        timer: 3000,
-        timerProgressBar: true
-      })
-
-    } catch (error) {
-      console.error("Error al imprimir:", error)
-      Swal.fire({
-        title: 'Error de Impresión',
-        text: 'No se pudo conectar con la impresora QZ Tray.',
-        icon: 'error',
-        confirmButtonColor: '#2C46AF'
-      })
-    } finally {
-      setImprimiendo(false)
+const reimprimirFactura = async (venta) => {
+  setImprimiendo(true)
+  try {
+    if (!qz.websocket.isActive()) {
+      await qz.websocket.connect()
     }
+
+    const config = qz.configs.create("EPSON")
+    
+    const fechaVentaObj = venta.fecha_hora ? new Date(venta.fecha_hora) : new Date()
+    const fechaTxt = fechaVentaObj.toLocaleDateString('es-CO')
+    const horaTxt = fechaVentaObj.toLocaleTimeString('es-CO')
+
+    // Estructuramos la cabecera exacta de 33 caracteres (3 + 19 + 11)
+    const cabeceraTabla = 'CT '.padEnd(3, ' ') + 'ITEM'.padEnd(19, ' ') + 'VALOR'.padStart(11, ' ')
+
+    const data = [
+      '\x1B\x40',          // Reset / Inicializar impresora
+      '\x1B\x61\x01',      // ALINEACIÓN AL CENTRO (Se mantiene para todo el ticket)
+      '\x1B\x45\x01',      // Activar Negrita
+      'DROGUERIA\n',
+      'DON SIXTO GABRIEL\n',
+      '\x1B\x45\x00',      // Desactivar Negrita
+      'NIT: 17.341.933-1\n',
+      'K 19 4D 08, Macunaima\n',
+      'Villavicencio, Meta\n',
+      'Celular: 320 490 1142\n',
+      '---------------------------------\n', // 33 guiones centrados
+      '\x1B\x45\x01',
+      `Factura de Venta POS #${venta.id.toString().padStart(5, '0')}\n`,
+      '\x1B\x45\x00',
+      `Fecha: ${fechaTxt} ${horaTxt}\n`,
+      'Cajero: Administrador\n',
+      '---------------------------------\n', // 33 guiones centrados
+      '\x1B\x45\x01',
+      `${cabeceraTabla}\n`,                  // 33 caracteres centrados
+      '\x1B\x45\x00',
+    ]
+
+    const detalles = venta.detalles || []
+    detalles.forEach(item => {
+      const cant = (item.cantidad || 1).toString().padEnd(3, ' ')
+      const nombreProd = (item.producto_nombre || 'Producto').substring(0, 18).padEnd(19, ' ')
+      const precioUnit = item.precio_unitario_aplicado || item.precio_unitario || item.precio || 0
+      const subtotalVal = item.subtotal || (precioUnit * item.cantidad)
+      const subtotalStr = `$${parseFloat(subtotalVal).toLocaleString()}`.padStart(11, ' ')
+      
+      // Cada fila mide exactamente 33 caracteres centrados
+      data.push(`${cant}${nombreProd}${subtotalStr}\n`)
+    })
+
+    data.push('---------------------------------\n') // 33 guiones centrados
+    
+    // Fila del TOTAL de 33 caracteres (22 + 11)
+    const labelTotal = 'TOTAL:'.padEnd(22, ' ')
+    const valTotal = `$${parseFloat(venta.total).toLocaleString()}`.padStart(11, ' ')
+    
+    data.push('\x1B\x45\x01') // Negrita On
+    data.push(`${labelTotal}${valTotal}\n`)
+    data.push('\x1B\x45\x00') // Negrita Off
+    
+    data.push('---------------------------------\n') // 33 guiones centrados
+    
+    data.push('¡Gracias por su compra!\n')
+    data.push('Que tenga un excelente día\n')
+
+    // AVANCE DE PAPEL Y CORTE
+    data.push('\x0A\x0A\x0A\x0A') // 8 saltos de línea para la cuchilla
+    data.push('\x1D\x56\x41')         // Guillotina ESC/POS
+    data.push('\x1B\x70\x00\x19\xFA') // Apertura de cajón monedero
+
+    await qz.print(config, data)
+
+    Swal.fire({
+      title: '¡Factura Impresa!',
+      text: `Factura #${venta.id.toString().padStart(5, '0')} enviada a la impresora.`,
+      icon: 'success',
+      toast: true,
+      position: 'top-end',
+      showConfirmButton: false,
+      timer: 3000,
+      timerProgressBar: true
+    })
+
+  } catch (error) {
+    console.error("Error al imprimir:", error)
+    Swal.fire({
+      title: 'Error de Impresión',
+      text: 'No se pudo conectar con la impresora QZ Tray. Revisa que el programa esté abierto.',
+      icon: 'error',
+      confirmButtonColor: '#2C46AF'
+    })
+  } finally {
+    setImprimiendo(false)
   }
+}
 
   // DEVOLVER UN SOLO PRODUCTO Y RECALCULAR FACTURA
   const eliminarItemFactura = async (detalleId, productoNombre) => {
