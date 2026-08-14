@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   Search,
   ShoppingCart,
@@ -20,6 +20,20 @@ export default function PuntoVenta() {
   const [carrito, setCarrito] = useState([])
   const [cargando, setCargando] = useState(false)
   const [todosLosProductos, setTodosLosProductos] = useState([])
+
+  // REFERENCIA PARA ENFOCAR EL BUSCADOR AUTOMÁTICAMENTE
+  const buscadorRef = useRef(null)
+
+  const enfocarBuscador = () => {
+    if (buscadorRef.current) {
+      buscadorRef.current.focus()
+      buscadorRef.current.select?.()
+    } else {
+      const input = document.querySelector('input[name="busqueda"]')
+      input?.focus()
+      input?.select()
+    }
+  }
 
   useEffect(() => { 
     const conectarImpresora = async () => {
@@ -44,6 +58,11 @@ export default function PuntoVenta() {
 
     conectarImpresora()
     cargarProductos()
+
+    // AUTOENFOQUE INMEDIATO AL ENTRAR A LA PÁGINA
+    setTimeout(() => {
+      enfocarBuscador()
+    }, 100)
   }, [])
 
   const resultados = useMemo(() => {
@@ -70,6 +89,9 @@ export default function PuntoVenta() {
       return [...prev, { ...producto, idUnico, tipo_unidad: tipoUnidad, precioVentaReal: precio, cantidad }]
     })
     setBusqueda('')
+    
+    // REGRESA EL CURSOR AL BUSCADOR
+    setTimeout(enfocarBuscador, 50)
   }
 
   // AUMENTAR O DISMINUIR CON BOTONES + Y -
@@ -97,8 +119,15 @@ export default function PuntoVenta() {
     )
   }
 
-  const eliminarDelCarrito = idUnico => setCarrito(prev => prev.filter(item => item.idUnico !== idUnico))
-  const limpiarCarrito = () => setCarrito([])
+  const eliminarDelCarrito = idUnico => {
+    setCarrito(prev => prev.filter(item => item.idUnico !== idUnico))
+    enfocarBuscador()
+  }
+
+  const limpiarCarrito = () => {
+    setCarrito([])
+    enfocarBuscador()
+  }
 
   const totalPagar = useMemo(() => {
     return carrito.reduce((sum, item) => sum + parseFloat(item.precioVentaReal) * item.cantidad, 0)
@@ -110,7 +139,11 @@ export default function PuntoVenta() {
       text: `El total cobrado es de $${Number(totalRegistrado).toLocaleString()}`,
       icon: 'success',
       confirmButtonText: 'Aceptar',
-      confirmButtonColor: '#16a34a'
+      confirmButtonColor: '#16a34a',
+      didClose: () => {
+        // ENFOCAR AUTOMÁTICAMENTE APENAS SE CIERRE LA VENTANA DE ÉXITO
+        setTimeout(enfocarBuscador, 50)
+      }
     })
     setCarrito([])
     setBusqueda('')
@@ -126,24 +159,22 @@ export default function PuntoVenta() {
       const nombreImpresora = "EPSON TM-U220 Receipt" 
       const config = qz.configs.create(nombreImpresora)
 
-      // Formateador exacto a 33 caracteres por fila
-      const formatearLineaTicket = (cant, nombre, total) => {
+      const formatearLineaTicket = (cant, nombre, total) => { 
         const c = cant.toString().padEnd(3, ' ')
         const n = nombre.substring(0, 18).padEnd(19, ' ')
         const t = `$${total.toLocaleString()}`.padStart(11, ' ')
         return `${c}${n}${t}\n`
       }
 
-      // Cabecera exacta de 33 caracteres (3 + 19 + 11)
-      const cabeceraTabla = 'CT '.padEnd(3, ' ') + 'ITEM'.padEnd(19, ' ') + 'VALOR'.padStart(11, ' ')
+      const cabeceraTabla = 'CT '.padEnd(3, ' ') + 'ITEM'.padEnd(19, ' ') + 'VALOR'.padStart(11, ' ') 
 
       const data = [
-        '\x1B\x40',          // Reset / Inicializar impresora
-        '\x1B\x61\x01',      // ALINEACIÓN AL CENTRO
-        '\x1B\x45\x01',      // Activar Negrita
+        '\x1B\x40',
+        '\x1B\x61\x01',
+        '\x1B\x45\x01',
         'DROGUERIA\n',
         'DON SIXTO GABRIEL\n',
-        '\x1B\x45\x00',      // Desactivar Negrita
+        '\x1B\x45\x00',
         'NIT: 17.341.933-1\n',
         'K 19 4D 08, Macunaima\n',
         'Villavicencio, Meta\n',
@@ -154,7 +185,7 @@ export default function PuntoVenta() {
         '\x1B\x45\x00',
         `Fecha: ${new Date().toLocaleDateString('es-CO')} ${new Date().toLocaleTimeString('es-CO')}\n`,
         'Cajero: Administrador\n',
-        '---------------------------------\n', 
+        '---------------------------------\n',
         '\x1B\x45\x01',
         `${cabeceraTabla}\n`,
         '\x1B\x45\x00',
@@ -202,7 +233,11 @@ export default function PuntoVenta() {
       confirmButtonColor: '#16a34a',
       cancelButtonColor: '#d33',
       confirmButtonText: 'Sí, registrar',
-      cancelButtonText: 'Cancelar'
+      cancelButtonText: 'Cancelar',
+      didClose: () => {
+        // Si cancela la venta, devuelve el foco al buscador
+        enfocarBuscador()
+      }
     })
 
     if (!confirmacion.isConfirmed) return
@@ -231,7 +266,10 @@ export default function PuntoVenta() {
         title: 'Error en la venta',
         text: mensajeError,
         icon: 'warning',
-        confirmButtonColor: '#eab308'
+        confirmButtonColor: '#eab308',
+        didClose: () => {
+          enfocarBuscador()
+        }
       })
       setCargando(false)
     }
@@ -239,8 +277,7 @@ export default function PuntoVenta() {
 
   const manejarEscaneo = e => {
     e.preventDefault()
-    const inputBuscador = document.querySelector('input[name="busqueda"]')
-    inputBuscador?.select()
+    enfocarBuscador()
   }
 
   return (
@@ -255,6 +292,7 @@ export default function PuntoVenta() {
 
           <form onSubmit={manejarEscaneo} className="mb-6">
             <Input
+              ref={buscadorRef}
               name="busqueda"
               icon={Search}
               placeholder="Escribe el nombre o escanea un código..."
@@ -276,8 +314,11 @@ export default function PuntoVenta() {
           </div>
         </div>
 
-        {/* PANEL DERECHO */}
-        <div className="w-full md:w-1/3 bg-white flex flex-col shadow-xl z-10 shrink-0">
+        {/* PANEL DERECHO: DETECTA CUANDO EL PUNTERO DEL RATÓN SALE DE LA ZONA DEL CARRITO */}
+        <div 
+          className="w-full md:w-1/3 bg-white flex flex-col shadow-xl z-10 shrink-0"
+          onMouseLeave={enfocarBuscador}
+        >
           <div className="p-6 bg-slate-800 text-white flex justify-between items-center">
             <h2 className="text-xl font-bold flex items-center">
               <ShoppingCart className="mr-2" />
