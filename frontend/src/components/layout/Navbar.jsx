@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 // Agregamos los íconos nuevos: CheckSquare, Square, Plus, Minus, Printer
 import { User, Bell, LogOut, Settings, AlertTriangle, PackageSearch, TrendingUp, CheckSquare, Square, Plus, Minus, Printer } from 'lucide-react'
-import clienteAxios from '../api/axios'
+import clienteAxios from "../../api/axios";
 import qz from 'qz-tray' // <-- Importamos QZ Tray para imprimir los pedidos
 
 export default function Navbar() {
