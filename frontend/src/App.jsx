@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import Layout from './components/Layout'
-import PuntoVenta from './pages/PuntoVenta'
-import Inventario from './pages/Inventario'
-import Contabilidad from './pages/Contabilidad'
+import Layout from './components/layout/Layout'
+import PuntoVenta from './pages/puntoVenta/PuntoVenta'
+import Inventario from './pages/inventario/Inventario'
+import Contabilidad from './pages/contabilidad/Contabilidad'
 import Login from './pages/Login' // 
 import Configuracion from './pages/Configuracion'
 
