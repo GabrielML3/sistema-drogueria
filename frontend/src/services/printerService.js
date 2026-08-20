@@ -8,13 +8,11 @@ export const imprimirTicket = async (ventaData) => {
 
     const nombreImpresora = "EPSON TM-U220 Receipt"
     const config = qz.configs.create(nombreImpresora)
-
-    
+ 
     const fechaObj = ventaData.fecha_hora ? new Date(ventaData.fecha_hora) : new Date()
     const fechaTxt = fechaObj.toLocaleDateString('es-CO')
     const horaTxt = fechaObj.toLocaleTimeString('es-CO')
 
-    
     const numFactura = ventaData.id 
       ? `#${ventaData.id.toString().padStart(5, '0')}` 
       : 'POS'
@@ -50,8 +48,7 @@ export const imprimirTicket = async (ventaData) => {
       '\x1B\x45\x01',
       `${cabeceraTabla}\n`,
       '\x1B\x45\x00',
-    ]
-
+    ] 
 
     const listaProductos = ventaData.detalles || ventaData.items || []
 
@@ -62,31 +59,58 @@ export const imprimirTicket = async (ventaData) => {
       const subtotal = item.subtotal || (precioUnit * cantidad)
 
       data.push(formatearLinea(cantidad, nombre, subtotal))
-    })
-
+    }) 
 
     data.push('---------------------------------\n')
     
     const labelTotal = 'TOTAL:'.padEnd(22, ' ')
     const valTotal = `$${parseFloat(ventaData.total || 0).toLocaleString()}`.padStart(11, ' ')
     
-    data.push('\x1B\x45\x01') // Negrita On
+    data.push('\x1B\x45\x01')
     data.push(`${labelTotal}${valTotal}\n`)
-    data.push('\x1B\x45\x00') // Negrita Off
+    data.push('\x1B\x45\x00')
     
     data.push('---------------------------------\n')
     data.push('¡Gracias por su compra!\n')
     data.push('Que tenga un excelente dia\n')
     
+    // 1. PULSO AL CAJÓN (ANTES DEL CORTE) - Pin 2 y Pin 5
+    data.push('\x1B\x70\x00\x19\xFA')
+    data.push('\x1B\x70\x01\x19\xFA')
+
+    // 2. AVANCE Y CORTE DE PAPEL
     data.push('\x0A\x0A\x0A\x0A') 
     data.push('\x1D\x56\x41')
-    data.push('\x1B\x70\x00\x19\xFA')
-
+ 
     await qz.print(config, data)
     return true
 
   } catch (error) {
     console.error("Error en printerService:", error)
     throw error
+  }
+}
+
+export const abrirCajon = async () => {
+  try {
+    if (!qz.websocket.isActive()) {
+      await qz.websocket.connect()
+    }
+
+    const config = qz.configs.create("EPSON TM-U220 Receipt")
+
+    // Pulso a ambos pines + salto de línea obligatorio para liberar la cola del spooler de Windows
+    const data = [
+      '\x1B\x40',          
+      '\x1B\x70\x00\x19\xFA',
+      '\x1B\x70\x01\x19\xFA',
+      '\x0A'
+    ]
+
+    await qz.print(config, data)
+    return true
+  } catch (error) {
+    console.error("Error al abrir cajón:", error)
+    return false
   }
 }

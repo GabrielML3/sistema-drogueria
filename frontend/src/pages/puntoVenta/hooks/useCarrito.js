@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import Swal from 'sweetalert2'
 import clienteAxios from '../../../api/axios'
-import { imprimirTicket } from '../../../services/printerService'
+import { imprimirTicket, abrirCajon } from '../../../services/printerService'
 
 export function useCarrito() {
   const [busqueda, setBusqueda] = useState('')
@@ -157,6 +157,8 @@ export function useCarrito() {
           total: totalPagar,
           items: carrito
         })
+      } else {
+        await abrirCajon()
       }
 
       finalizarVenta(res.data.total)
