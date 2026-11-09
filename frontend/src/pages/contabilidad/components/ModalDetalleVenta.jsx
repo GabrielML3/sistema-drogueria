@@ -13,16 +13,20 @@ export default function ModalDetalleVenta({
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
-        
-        <div className="p-6 border-b bg-slate-50 flex justify-between items-center">
+        <div className="p-6 border-b bg-slate-50 flex justify-between items-center"> 
           <div>
             <h2 className="text-2xl font-bold text-[#2C46AF] flex items-center">
-              <FileText className="mr-2" /> 
+              <FileText className="mr-2" />
               Detalle de Factura #{ventaSeleccionada.id.toString().padStart(5, '0')}
             </h2>
-            <p className="text-sm text-gray-500 font-medium mt-1">{ventaSeleccionada.fecha_formateada}</p>
+            <p className="text-sm text-gray-500 font-medium mt-1">
+              {ventaSeleccionada.fecha_formateada}
+            </p>
           </div>
-          <button onClick={() => setVentaSeleccionada(null)} className="text-gray-400 hover:text-red-600 transition-colors">
+          <button
+            onClick={() => setVentaSeleccionada(null)}
+            className="text-gray-400 hover:text-red-600 transition-colors"
+          >
             <span className="text-2xl font-bold">&times;</span>
           </button>
         </div>
@@ -42,13 +46,19 @@ export default function ModalDetalleVenta({
             <tbody>
               {ventaSeleccionada.detalles && ventaSeleccionada.detalles.length > 0 ? (
                 ventaSeleccionada.detalles.map((detalle, index) => {
-                  const precio = detalle.precio_unitario_aplicado || detalle.precio_unitario || detalle.precio || detalle.precio_venta || 0
-                  const subtotal = detalle.subtotal || (precio * (detalle.cantidad || 1)) || 0
-                  const formato = detalle.tipo_unidad || detalle.formato || detalle.presentacion || 'UND'
+                  const precio =
+                    detalle.precio_unitario_aplicado ||
+                    detalle.precio_unitario ||
+                    detalle.precio ||
+                    detalle.precio_venta ||
+                    0
+                  const subtotal = detalle.subtotal || precio * (detalle.cantidad || 1) || 0
+                  const formato =
+                    detalle.tipo_unidad || detalle.formato || detalle.presentacion || 'UND'
                   const cantidad = detalle.cantidad || 1
 
                   return (
-                    <tr key={index} className="border-b hover:bg-slate-50 transition-colors">
+                    <tr key={detalle.id || index} className="border-b hover:bg-slate-50 transition-colors">
                       <td className="p-4 font-bold text-gray-800 flex items-center">
                         <Package className="w-4 h-4 mr-2 text-[#2C46AF]" />
                         {detalle.producto_nombre}
@@ -59,8 +69,12 @@ export default function ModalDetalleVenta({
                         </span>
                       </td>
                       <td className="p-4 text-center font-bold text-gray-700">{cantidad}</td>
-                      <td className="p-4 text-right text-gray-600 font-medium">${parseFloat(precio).toLocaleString()}</td>
-                      <td className="p-4 text-right font-bold text-gray-800">${parseFloat(subtotal).toLocaleString()}</td>
+                      <td className="p-4 text-right text-gray-600 font-medium">
+                        ${parseFloat(precio).toLocaleString()}
+                      </td>
+                      <td className="p-4 text-right font-bold text-gray-800">
+                        ${parseFloat(subtotal).toLocaleString()}
+                      </td>
                       <td className="p-4 text-center">
                         <button
                           onClick={() => eliminarItemFactura(detalle.id, detalle.producto_nombre)}
@@ -104,16 +118,19 @@ export default function ModalDetalleVenta({
           <div className="text-right space-y-1 min-w-[200px]">
             <div className="flex justify-between items-center gap-4 text-gray-600 font-medium text-sm">
               <span>Ganancia Neta:</span>
-              <span className="text-green-600 font-bold">${parseFloat(ventaSeleccionada.ganancia_neta).toLocaleString()}</span>
+              <span className="text-green-600 font-bold">
+                ${parseFloat(ventaSeleccionada.ganancia_neta || 0).toLocaleString()}
+              </span>
             </div>
             <div className="flex justify-between items-center gap-4 text-lg font-bold text-gray-800 border-t pt-1 border-gray-200">
               <span>Total Pagado:</span>
-              <span className="text-[#2C46AF]">${parseFloat(ventaSeleccionada.total).toLocaleString()}</span>
+              <span className="text-[#2C46AF]">
+                ${parseFloat(ventaSeleccionada.total || 0).toLocaleString()}
+              </span>
             </div>
           </div>
         </div>
-
-      </div>
+      </div> 
     </div>
   )
 }
