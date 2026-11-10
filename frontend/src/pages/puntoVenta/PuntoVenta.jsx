@@ -1,8 +1,9 @@
-import { Search, ShoppingCart, Trash2, DollarSign, Printer } from 'lucide-react'
+import { Search, ShoppingCart, Trash2, DollarSign, Printer, HandCoins } from 'lucide-react'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import ProductoVenta from './components/ProductoVenta'
 import ItemCarrito from './components/ItemCarrito'
+import ModalFiarVenta from './components/ModalFiarVenta'
 import { useCarrito } from './hooks/useCarrito'
 
 export default function PuntoVenta() {
@@ -20,7 +21,10 @@ export default function PuntoVenta() {
     fijarCantidadDirecta,
     eliminarDelCarrito,
     limpiarCarrito,
-    facturarVenta
+    facturarVenta,
+    modalFiarAbierto,
+    setModalFiarAbierto,
+    registrarFiado
   } = useCarrito()
 
   const manejarEscaneo = e => {
@@ -60,7 +64,7 @@ export default function PuntoVenta() {
         </div>
       </div>
 
-      <div 
+      <div
         className="w-full md:w-1/3 bg-white flex flex-col shadow-xl z-10 shrink-0"
         onMouseLeave={enfocarBuscador}
       >
@@ -99,19 +103,19 @@ export default function PuntoVenta() {
             <span className="text-3xl font-bold text-[#2C46AF]">${totalPagar.toLocaleString()}</span>
           </div>
 
-          <div className="flex flex-col gap-2"> 
+          <div className="flex flex-col gap-2">
             <div className="flex gap-2">
               {carrito.length > 0 && (
-                <Button 
-                  variant="danger" 
-                  onClick={limpiarCarrito} 
-                  title="Vaciar carrito" 
+                <Button
+                  variant="danger"
+                  onClick={limpiarCarrito}
+                  title="Vaciar carrito"
                   className="px-3 py-2 shrink-0"
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>
               )}
-              
+
               <Button
                 variant="secondary"
                 onClick={() => facturarVenta(true)}
@@ -121,9 +125,20 @@ export default function PuntoVenta() {
               >
                 Imprimir y Cobrar
               </Button>
+
+              <button
+                type="button"
+                disabled={carrito.length === 0 || cargando}
+                onClick={() => setModalFiarAbierto(true)}
+                className="px-3.5 py-2 rounded-lg font-bold text-sm bg-amber-50 text-amber-700 border border-amber-300 hover:bg-amber-100 flex items-center gap-1.5 transition-colors disabled:opacity-50 shadow-sm shrink-0"
+                title="Registrar como Deuda / Fiado"
+              >
+                <HandCoins className="w-4 h-4" />
+                Fiar / Deuda
+              </button>
             </div>
 
-            <Button 
+            <Button
               variant="success"
               onClick={() => facturarVenta(false)}
               cargando={cargando}
@@ -132,9 +147,17 @@ export default function PuntoVenta() {
             >
               Cobrar Venta
             </Button>
-          </div> 
+          </div>
         </div>
       </div>
+
+      <ModalFiarVenta
+        abierto={modalFiarAbierto}
+        onCerrar={() => setModalFiarAbierto(false)}
+        onConfirmarFiado={registrarFiado}
+        totalPagar={totalPagar}
+        cargando={cargando}
+      />
     </div>
   )
 }
