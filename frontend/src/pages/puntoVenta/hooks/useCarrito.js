@@ -8,6 +8,7 @@ export function useCarrito() {
   const [carrito, setCarrito] = useState([])
   const [cargando, setCargando] = useState(false)
   const [todosLosProductos, setTodosLosProductos] = useState([])
+  const [modalFiarAbierto, setModalFiarAbierto] = useState(false)
 
   const buscadorRef = useRef(null)
 
@@ -22,19 +23,18 @@ export function useCarrito() {
     }
   }
 
-  useEffect(() => {
-    const cargarProductos = async () => {
-      try {
-        const res = await clienteAxios.get('productos/')
-        setTodosLosProductos(res.data)
-      } catch (error) {
-        console.error(error)
-      }
+  const cargarProductos = async () => {
+    try {
+      const res = await clienteAxios.get('productos/')
+      setTodosLosProductos(res.data)
+    } catch (error) {
+      console.error(error)
     }
+  }
 
+  useEffect(() => {
     cargarProductos()
-
-    setTimeout(() => {
+    setTimeout(() => { 
       enfocarBuscador()
     }, 100)
   }, [])
@@ -117,6 +117,7 @@ export function useCarrito() {
     setCarrito([])
     setBusqueda('')
     setCargando(false)
+    cargarProductos()
   }
 
   const facturarVenta = async (imprimir = false) => {
@@ -138,8 +139,7 @@ export function useCarrito() {
 
     if (!confirmacion.isConfirmed) return
 
-    setCargando(true)
-
+    setCargando(true) 
     const payload = {
       items: carrito.map(item => ({
         id: item.id,
@@ -177,6 +177,49 @@ export function useCarrito() {
     }
   }
 
+  const registrarFiado = async (datosCliente) => {
+    if (carrito.length === 0) return
+
+    setCargando(true)
+    const payload = {
+      ...datosCliente,
+      items: carrito.map(item => ({
+        id: item.id,
+        tipo_unidad: item.tipo_unidad,
+        cantidad: item.cantidad
+      }))
+    }
+
+    try {
+      const res = await clienteAxios.post('deudas/registrar-pos/', payload)
+      setModalFiarAbierto(false)
+
+      await Swal.fire({
+        title: '¡Registrado en Deudas!',
+        text: `Cuenta de ${res.data.deuda.cliente_nombre} actualizada. Saldo pendiente: $${parseFloat(res.data.deuda.saldo_pendiente).toLocaleString()}`,
+        icon: 'success',
+        confirmButtonColor: '#2C46AF',
+        didClose: () => {
+          setTimeout(enfocarBuscador, 50)
+        }
+      })
+
+      setCarrito([])
+      setBusqueda('')
+      cargarProductos()
+    } catch (error) {
+      const msg = error.response?.data?.error || 'No se pudo registrar la deuda.'
+      Swal.fire({
+        title: 'Error al Fiar',
+        text: msg,
+        icon: 'error',
+        confirmButtonColor: '#2C46AF'
+      })
+    } finally {
+      setCargando(false)
+    }
+  }
+
   return {
     busqueda,
     setBusqueda,
@@ -191,6 +234,9 @@ export function useCarrito() {
     fijarCantidadDirecta,
     eliminarDelCarrito,
     limpiarCarrito,
-    facturarVenta
+    facturarVenta,
+    modalFiarAbierto,
+    setModalFiarAbierto,
+    registrarFiado
   }
 }

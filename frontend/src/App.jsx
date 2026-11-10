@@ -6,6 +6,7 @@ import Inventario from './pages/inventario/Inventario'
 import Contabilidad from './pages/contabilidad/Contabilidad'
 import Login from './pages/Login' // 
 import Configuracion from './pages/Configuracion'
+import Deudas from './pages/Deudas/Deudas'
 
 export default function App() {
   // Comprobamos si ya hay un token guardado en el navegador al abrir la página
@@ -27,6 +28,7 @@ export default function App() {
           <Route path="/inventario" element={<Inventario />} />
           <Route path="/contabilidad" element={<Contabilidad />} />
           <Route path="/configuracion" element={<Configuracion />} />
+          <Route path="/deudas" element={<Deudas />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </Layout>
